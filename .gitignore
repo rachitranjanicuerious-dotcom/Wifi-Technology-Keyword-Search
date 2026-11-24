@@ -1,0 +1,28 @@
+
+# Sample Wi-Fi technical documents
+Sample Wi-Fi 7 WG Doc/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables and API keys
+.env
+.env.*
+
+# VS Code settings (optional)
+.vscode/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.log
+.DS_Store
+Thumbs.db

@@ -3,6 +3,9 @@ import pandas as pd
 import streamlit as st
 from docx import Document
 from pptx import Presentation
+import re
+import zipfile
+import io
 
 # =========================================================
 # 1. PAGE CONFIGURATION
@@ -20,6 +23,30 @@ st.write(
     "Search technical documents in the Sample Wi-Fi repository "
     "using exact keyword or phrase matching."
 )
+
+# Function to Zip the retieved files
+def create_zip_file(results):
+
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(
+        zip_buffer,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED
+    ) as zip_file:
+
+        for result in results:
+
+            file_path = Path(result["Document Path"])
+
+            if file_path.exists():
+                zip_file.write(
+                    file_path,
+                    arcname=file_path.name
+                )
+
+    zip_buffer.seek(0)
+    return zip_buffer
 
 # =========================================================
 # 2. SUPPORTED FILE FORMATS
@@ -41,6 +68,16 @@ def clean_text(text):
         return ""
 
     return " ".join(str(text).split())
+
+def normalize_for_search(text):
+    # Convert hyphens and underscores into spaces
+    text = re.sub(r"[-_]+", " ", str(text))
+
+    # Convert multiple spaces/newlines into a single space
+    text = re.sub(r"\s+", " ", text)
+
+    # Ignore uppercase and lowercase differences
+    return text.casefold().strip()
 
 # =========================================================
 # 4. WORD DOCUMENT EXTRACTION
@@ -78,9 +115,9 @@ def extract_word(file_path):
 
     return "\n".join(extracted_text)            
 
-# # =========================================================
-# # 5. POWERPOINT DOCUMENT EXTRACTION
-# # =========================================================
+# =========================================================
+# 5. POWERPOINT DOCUMENT EXTRACTION
+# =========================================================
 
 def extract_powerpoint(file_path):
 
@@ -191,20 +228,22 @@ def search_documents(repository_path , search_keyword):
     results = []
     errors = []
 
-    keyword = search_keyword.casefold().strip()
+    keyword = normalize_for_search(search_keyword)
+
+    # Create whole-word matching pattern
+    pattern = r"(?<![A-Za-z0-9])" + re.escape(keyword) + r"(?![A-Za-z0-9])"
 
     total_files = 0
     searched_files = 0
 
     # Recursively scan all folders
     all_files = [
-        file_path
-        for file_path in repository.glob("*")
-        if file_path.is_file()
-        and file_path.suffix.lower() in SUPPORTED_EXTENSIONS
-        and not file_path.name.startswith("~$")
-
-    ]
+    file_path
+    for file_path in repository.rglob("*")
+    if file_path.is_file()
+    and file_path.suffix.lower() in SUPPORTED_EXTENSIONS
+    and not file_path.name.startswith("~$")
+]
 
     total_files = len(all_files)
     progress = st.progress(0)
@@ -219,19 +258,16 @@ def search_documents(repository_path , search_keyword):
             )
 
             document_text = extract_document_text(file_path)
-
+            normalized_document = normalize_for_search(document_text)
             searched_files += 1
 
-            if keyword in document_text.casefold():
-
-                results.append({
-
-                    "Document Name" : file_path.name,
-                    "File Type":   file_path.suffix.lower(),
-                    "Folder" : str(file_path.parent.relative_to(repository)) ,
-                    "Document Path" : str(file_path)
-                })
-
+            # Check for exact word or phrase
+            if re.search(pattern, normalized_document):
+                    results.append({
+                        "Document Name": file_path.name,
+                        "File Type": file_path.suffix.lower(),
+                        "Document Path": str(file_path)
+                    })
 
         except Exception as error:
 
@@ -259,10 +295,23 @@ def search_documents(repository_path , search_keyword):
 
 st.sidebar.header("Repository Settings")
 
-repository_path = st.sidebar.text_input(
-                            "Repository Folder Path",
-                             value="Sample Wi-Fi 7 WG Doc/Sample Wi-Fi 7 WG Doc"
+BASE_DIR = Path(__file__).resolve().parent
+
+DEFAULT_REPOSITORY = (
+    BASE_DIR
+    / "Sample Wi-Fi 7 WG Doc"
+    / "Sample Wi-Fi 7 WG Doc"
 )
+
+repository_path = st.sidebar.text_input(
+    "Repository Folder Path",
+    value=str(DEFAULT_REPOSITORY)
+)
+
+# repository_path = st.sidebar.text_input(
+#                             "Repository Folder Path",
+#                              value="Sample Wi-Fi 7 WG Doc/Sample Wi-Fi 7 WG Doc"
+# )
 
 st.sidebar.info(
       "The application searches all subfolders inside the repository"
@@ -359,7 +408,6 @@ if search_button:
                     [
                         "Document Name",
                         "File Type",
-                        "Folder",
                         "Document Path"
                     ]
                 ],
@@ -377,6 +425,15 @@ if search_button:
                 file_name="matching_documents.csv",
                 mime="text/csv"
             )
+
+            zip_file = create_zip_file(results)
+
+            st.download_button(
+            label="Download Retrieved Files (ZIP)",
+            data=zip_file,
+            file_name="Retrieved_Documents.zip",
+            mime="application/zip"
+        )
 
 
         else:
@@ -415,19 +472,6 @@ with st.expander("Search Information") :
         - PowerPoint: PPTX
         - Excel: XLSX
 
-        **Search methodology**
-
-        - Exact literal keyword and phrase matching.
-        - Case-insensitive search.
-        - Searches all files recursively across repository folders.
-        - Returns the names and paths of matching documents.
-
-        **Limitations**
-
-        - Text inside images and scanned documents is not extracted.
-        - Legacy DOC, PPT and XLS formats are not supported.
-        - Excel formulas are not recalculated; saved cell values are searched.
-        - A phrase must appear contiguously in the extracted text.
 """
     )
 

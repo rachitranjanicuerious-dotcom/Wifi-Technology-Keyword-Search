@@ -5,7 +5,7 @@ from docx import Document
 from pptx import Presentation
 import re
 import zipfile
-import io
+import io 
 import html
 import nltk
 from nltk.stem import WordNetLemmatizer
@@ -25,7 +25,6 @@ st.set_page_config(
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-
 
 # =========================================================
 # 2. LOAD EXTERNAL CSS AND HTML
@@ -75,7 +74,6 @@ def create_zip_file(results):
         for result in results:
 
             file_path = Path(result["Document Path"])
-
             if file_path.exists():
 
                 zip_file.write(
@@ -112,7 +110,7 @@ def normalize_for_search(text):
 
     # Convert hyphens and underscores into spaces
     text = re.sub(r"[-_]+", " ", str(text))
-
+    
     # Remove multiple spaces and newlines
     text = re.sub(r"\s+", " ", text)
 
@@ -149,7 +147,6 @@ def lemmatize_text(text):
         r"[A-Za-z0-9]+(?:[.+#][A-Za-z0-9+#]*)*",
         text
     )
-
     tagged_words = nltk.pos_tag(tokens)
 
     lemmatized_words = []
@@ -157,7 +154,6 @@ def lemmatize_text(text):
     for word, tag in tagged_words:
 
         pos = get_wordnet_pos(tag)
-
         lemma = lemmatizer.lemmatize(
             word,
             pos = pos
@@ -175,12 +171,10 @@ def lemmatize_text(text):
 def extract_word(file_path):
 
     doc = Document(file_path)
-
     extracted_text = []
-
+    
     # Extract paragraphs
     for paragraph in doc.paragraphs:
-
         text = clean_text(paragraph.text)
 
         if text:
@@ -190,11 +184,9 @@ def extract_word(file_path):
     for table in doc.tables:
 
         for row in table.rows:
-
             row_text = []
 
             for cell in row.cells:
-
                 text = clean_text(cell.text)
 
                 if text:
@@ -212,16 +204,13 @@ def extract_word(file_path):
 def extract_powerpoint(file_path):
 
     presentation = Presentation(file_path)
-
     extracted_text = []
-
     for slide in presentation.slides:
 
         for shape in slide.shapes:
 
             # Extract text from text boxes
             if getattr(shape, "has_text_frame", False):
-
                 text = clean_text(shape.text)
 
                 if text:
@@ -231,11 +220,9 @@ def extract_powerpoint(file_path):
             if getattr(shape, "has_table", False):
 
                 for row in shape.table.rows:
-
                     row_text = []
 
                     for cell in row.cells:
-
                         text = clean_text(cell.text)
 
                         if text:
@@ -301,17 +288,14 @@ def extract_excel(file_path):
 def extract_document_text(file_path):
 
     extension = file_path.suffix.lower()
-
+    
     if extension == ".pptx":
-
         return extract_powerpoint(file_path)
 
     elif extension == ".xlsx":
-
         return extract_excel(file_path)
 
     elif extension == ".docx":
-
         return extract_word(file_path)
 
     return ""
@@ -341,13 +325,9 @@ def search_documents(repository_path, search_keyword):
     all_files = [
 
         file_path
-
         for file_path in repository.rglob("*")
-
         if file_path.is_file()
-
         and file_path.suffix.lower() in SUPPORTED_EXTENSIONS
-
         and not file_path.name.startswith("~$")
 
     ]
@@ -381,9 +361,7 @@ def search_documents(repository_path, search_keyword):
                 results.append({
 
                     "Document Name": file_path.name,
-
                     "File Type": file_path.suffix.lower(),
-
                     "Document Path": str(file_path)
 
                 })
@@ -417,7 +395,6 @@ def search_documents(repository_path, search_keyword):
         searched_files
     )
 
-
 # =========================================================
 # 11. SIDEBAR SETTINGS
 # =========================================================
@@ -441,9 +418,7 @@ with st.sidebar:
             </div>
 
             <div class="ic-sidebar-brand-text">
-
                 <strong>iCuerious</strong>
-
                 <small>WORKSPACE</small>
 
             </div>
@@ -516,14 +491,12 @@ search_keyword = st.text_input(
     label_visibility="collapsed"
 )
 
-
 # Search button
 search_button = st.button(
     "Search Documents  →",
     type="primary",
     use_container_width=True
 )
-
 
 # =========================================================
 # 13. SEARCH EXECUTION AND RESULTS
@@ -632,19 +605,23 @@ if search_button:
 
             results_df = pd.DataFrame(results)
 
+            # Reading the filename of these documents
+            file_name = pd.read_excel("File_Names.xlsx")
+            results_df2 = results_df.merge(file_name , how = 'left' , left_on = 'Document Name' , right_on = 'File Name')
+
             # Display results table
             st.dataframe(
-                results_df[
+                results_df2[
                     [
                         "Document Name",
-                        "File Type",
+                        'Created (ET)', 'Year', 'DCN', 'Rev', 'Group', 'Title',
+                        'Author (Affiliation)', 'Uploaded (ET)' ,
                         "Document Path"
                     ]
                 ],
                 use_container_width=True,
                 hide_index=True
             )
-
 
             # =================================================
             # DOWNLOAD OPTIONS
@@ -657,13 +634,9 @@ if search_button:
 
                 st.download_button(
                     label="Download Results (CSV)",
-
-                    data=results_df.to_csv(index=False),
-
+                    data=results_df2.to_csv(index=False),
                     file_name="matching_documents.csv",
-
                     mime="text/csv",
-
                     use_container_width=True
                 )
 
@@ -674,13 +647,9 @@ if search_button:
 
                 st.download_button(
                     label="Download Retrieved Files (ZIP)",
-
                     data=zip_file,
-
                     file_name="Retrieved_Documents.zip",
-
                     mime="application/zip",
-
                     use_container_width=True
                 )
 
@@ -690,7 +659,6 @@ if search_button:
                 "No documents containing the searched "
                 "keyword were found."
             )
-
 
         # =================================================
         # FILES THAT COULD NOT BE SEARCHED
@@ -703,15 +671,12 @@ if search_button:
             ):
 
                 for error in errors:
-
                     st.write(
                         f"**{error['File']}**"
                     )
-
                     st.caption(
                         error["Error"]
                     )
-
 
 # =========================================================
 # 14. SEARCH INFORMATION

@@ -637,7 +637,8 @@ if search_button:
                     data=results_df2.to_csv(index=False),
                     file_name="matching_documents.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    use_container_width=True,
+                    on_click="ignore"
                 )
 
             # Download ZIP
@@ -650,7 +651,8 @@ if search_button:
                     data=zip_file,
                     file_name="Retrieved_Documents.zip",
                     mime="application/zip",
-                    use_container_width=True
+                    use_container_width=True,
+                    on_click="ignore"
                 )
 
         else:
@@ -693,7 +695,6 @@ with st.expander("Search Information"):
         - Microsoft Excel: XLSX
         """
     )
-
 
 # =========================================================
 # 15. FOOTER

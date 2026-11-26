@@ -54,9 +54,7 @@ def load_html(filename):
     html_path = BASE_DIR / filename
 
     if html_path.exists():
-
         content = html_path.read_text(encoding="utf-8")
-
         if filename == "header.html":
             content = content.replace(
                 "{{LOGO_BASE64}}",
@@ -254,7 +252,6 @@ def extract_powerpoint(file_path):
 def extract_excel(file_path):
 
     extracted_text = []
-
     excel_file = pd.ExcelFile(
         file_path,
         engine="openpyxl"
@@ -517,14 +514,20 @@ search_button = st.button(
 
 if search_button:
 
-    # Validate search keyword
+    # -----------------------------------------------------
+    # VALIDATE SEARCH INPUT
+    # -----------------------------------------------------
+
     if not search_keyword.strip():
 
         st.warning(
             "Please enter a keyword or phrase."
         )
 
-    # Validate repository path
+    # -----------------------------------------------------
+    # VALIDATE REPOSITORY PATH
+    # -----------------------------------------------------
+
     elif not Path(repository_path).is_dir():
 
         st.error(
@@ -534,7 +537,10 @@ if search_button:
 
     else:
 
-        # Execute search
+        # -------------------------------------------------
+        # EXECUTE SEARCH
+        # -------------------------------------------------
+
         with st.spinner(
             "Searching documents in the repository..."
         ):
@@ -551,7 +557,6 @@ if search_button:
 
         st.divider()
 
-
         # =================================================
         # SEARCH SUMMARY
         # =================================================
@@ -564,7 +569,6 @@ if search_button:
             """
         )
 
-        # Three metric cards
         col1, col2, col3 = st.columns(3)
 
         col1.metric(
@@ -582,21 +586,20 @@ if search_button:
             len(results)
         )
 
-        # Display search keyword
+        # -------------------------------------------------
+        # DISPLAY SEARCH KEYWORD
+        # -------------------------------------------------
+
         safe_keyword = html.escape(search_keyword)
 
         st.html(
             f"""
             <div class="ic-query-chip">
-
                 SEARCH QUERY &nbsp;&nbsp;
-
                 <strong>{safe_keyword}</strong>
-
             </div>
             """
         )
-
 
         # =================================================
         # MATCHING DOCUMENTS
@@ -616,24 +619,60 @@ if search_button:
                 f"Found {len(results)} matching document(s)."
             )
 
+            # -------------------------------------------------
+            # CREATE RESULTS DATAFRAME
+            # -------------------------------------------------
+
             results_df = pd.DataFrame(results)
 
-            # Reading the filename of these documents
-            file_name = pd.read_excel("File_Names.xlsx")
+            # Read document metadata
+            file_name = pd.read_excel(
+                "File_Names.xlsx"
+            )
 
-            results_df2 = results_df.merge(file_name , how = 'left' , left_on = 'Document Name' , right_on = 'File Name')
-            
+            # Merge search results with metadata
+            results_df2 = results_df.merge(
+                file_name,
+                how="left",
+                left_on="Document Name",
+                right_on="File Name"
+            )
 
-            # Display results table
+            # -------------------------------------------------
+            # SELECT COLUMNS TO DISPLAY AND EXPORT
+            # -------------------------------------------------
+
+            display_columns = [
+                "Document Name",
+                "Created (ET)",
+                "Year",
+                "DCN",
+                "Rev",
+                "Group",
+                "Title",
+                "Author (Affiliation)",
+                "Uploaded (ET)",
+                "Download Link"
+            ]
+
+            display_results_df = results_df2[
+                display_columns
+            ].copy()
+
+            # =================================================
+            # DISPLAY RESULTS WITH CLICKABLE LINKS
+            # =================================================
+
             st.dataframe(
-                results_df2[
-                    [
-                        "Document Name",
-                        'Created (ET)', 'Year', 'DCN', 'Rev', 'Group', 'Title',
-                        'Author (Affiliation)', 'Uploaded (ET)' ,
-                        "Document Path"
-                    ]
-                ],
+                display_results_df,
+
+                column_config={
+                    "Download Link": st.column_config.LinkColumn(
+                        "Download Link",
+                        display_text="Download"
+                    )
+                },
+
                 use_container_width=True,
                 hide_index=True
             )
@@ -642,22 +681,106 @@ if search_button:
             # DOWNLOAD OPTIONS
             # =================================================
 
-            download_col1, download_col2 = st.columns(2)
+            download_col2, download_col3 = (
+                st.columns(2)
+            )
 
-            # Download CSV
-            with download_col1:
+            # # -------------------------------------------------
+            # # 1. DOWNLOAD CSV
+            # # -------------------------------------------------
+
+            # with download_col1:
+
+            #     csv_data = display_results_df.to_csv(
+            #         index=False
+            #     )
+
+            #     st.download_button(
+            #         label="Download CSV",
+            #         data=csv_data,
+            #         file_name="matching_documents.csv",
+            #         mime="text/csv",
+            #         use_container_width=True,
+            #         on_click="ignore"
+            #     )
+
+            # -------------------------------------------------
+            # 2. DOWNLOAD EXCEL WITH CLICKABLE HYPERLINKS
+            # -------------------------------------------------
+
+            with download_col2:
+
+                excel_buffer = io.BytesIO()
+
+                with pd.ExcelWriter(
+                    excel_buffer,
+                    engine="openpyxl"
+                ) as writer:
+
+                    display_results_df.to_excel(
+                        writer,
+                        index=False,
+                        sheet_name="Matching Documents"
+                    )
+
+                    worksheet = writer.sheets[
+                        "Matching Documents"
+                    ]
+
+                    # Find Download Link column
+                    link_column = None
+
+                    for cell in worksheet[1]:
+
+                        if cell.value == "Download Link":
+                            link_column = cell.column
+                            break
+
+                    # Convert URLs into actual hyperlinks
+                    if link_column is not None:
+
+                        for row in range(
+                            2,
+                            worksheet.max_row + 1
+                        ):
+
+                            cell = worksheet.cell(
+                                row=row,
+                                column=link_column
+                            )
+
+                            if (
+                                cell.value
+                                and str(cell.value).startswith(
+                                    ("http://", "https://")
+                                )
+                            ):
+
+                                url = str(cell.value)
+
+                                cell.hyperlink = url
+                                cell.value = "Download"
+                                cell.style = "Hyperlink"
+
+                excel_buffer.seek(0)
 
                 st.download_button(
-                    label="Download Results (CSV)",
-                    data=results_df2.to_csv(index=False),
-                    file_name="matching_documents.csv",
-                    mime="text/csv",
+                    label="Download Excel",
+                    data=excel_buffer,
+                    file_name="Matching_Documents.xlsx",
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    ),
                     use_container_width=True,
                     on_click="ignore"
                 )
 
-            # Download ZIP
-            with download_col2:
+            # -------------------------------------------------
+            # 3. DOWNLOAD RETRIEVED DOCUMENTS AS ZIP
+            # -------------------------------------------------
+
+            with download_col3:
 
                 zip_file = create_zip_file(results)
 
@@ -688,12 +811,15 @@ if search_button:
             ):
 
                 for error in errors:
+
                     st.write(
                         f"**{error['File']}**"
                     )
+
                     st.caption(
                         error["Error"]
                     )
+
 
 # =========================================================
 # 14. FOOTER
@@ -702,9 +828,8 @@ if search_button:
 st.html(
     """
     <div class="ic-footer">
-        Wi-Fi Technical Document Search 
+        Wi-Fi Technical Document Search
         Keyword-Based Retrieval
-
     </div>
     """
 )

@@ -10,6 +10,7 @@ import html
 import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
+import base64
 
 nltk.download("wordnet", quiet=True)
 nltk.download("averaged_perceptron_tagger_eng", quiet=True)
@@ -42,13 +43,26 @@ def load_css():
 
         st.warning("styles.css file not found.")
 
+logo_path = BASE_DIR / "icuerious_logo.jfif"
+
+logo_base64 = base64.b64encode(
+    logo_path.read_bytes()
+).decode("utf-8")
 
 def load_html(filename):
 
     html_path = BASE_DIR / filename
 
     if html_path.exists():
+
         content = html_path.read_text(encoding="utf-8")
+
+        if filename == "header.html":
+            content = content.replace(
+                "{{LOGO_BASE64}}",
+                logo_base64
+            )
+
         st.html(content)
 
     else:
@@ -162,7 +176,6 @@ def lemmatize_text(text):
         lemmatized_words.append(lemma)
 
     return " ".join(lemmatized_words)
-
 
 # =========================================================
 # 6. WORD DOCUMENT EXTRACTION
@@ -607,7 +620,9 @@ if search_button:
 
             # Reading the filename of these documents
             file_name = pd.read_excel("File_Names.xlsx")
+
             results_df2 = results_df.merge(file_name , how = 'left' , left_on = 'Document Name' , right_on = 'File Name')
+            
 
             # Display results table
             st.dataframe(
@@ -681,23 +696,7 @@ if search_button:
                     )
 
 # =========================================================
-# 14. SEARCH INFORMATION
-# =========================================================
-
-with st.expander("Search Information"):
-
-    st.markdown(
-        """
-        **Supported File Formats**
-
-        - Microsoft Word: DOCX
-        - Microsoft PowerPoint: PPTX
-        - Microsoft Excel: XLSX
-        """
-    )
-
-# =========================================================
-# 15. FOOTER
+# 14. FOOTER
 # =========================================================
 
 st.html(

@@ -9,10 +9,13 @@ import io
 import html
 import nltk
 import fitz
+import pytesseract
+from PIL import Image
+from openpyxl import load_workbook
+import shutil
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
 import base64 
-
 nltk.download("wordnet", quiet=True)
 nltk.download("averaged_perceptron_tagger_eng", quiet=True)
 
@@ -105,7 +108,7 @@ SUPPORTED_EXTENSIONS = {
     ".docx",
     ".pptx",
     ".xlsx",
-    "pdf"
+    ".pdf"
 }
 
 # =========================================================
@@ -145,10 +148,10 @@ def get_wordnet_pos(tag):
         return wordnet.VERB
 
     elif tag.startswith("N"):
-        return wordnet.NOUN
+        return wordnet.NOUN 
 
     elif tag.startswith("R"):
-        return wordnet.NOUN
+        return wordnet.ADV
 
     return wordnet.NOUN
 
@@ -178,7 +181,46 @@ def lemmatize_text(text):
     return " ".join(lemmatized_words)
 
 # =========================================================
-# 6. WORD DOCUMENT EXTRACTION
+# 6. COMMON OCR FUNCTION
+# =========================================================
+
+tesseract_path = shutil.which("tesseract")
+
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
+elif Path(
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+).exists():
+
+    pytesseract.pytesseract.tesseract_cmd = (
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
+
+def extract_text_from_image(image_data):
+
+    try:
+
+        image = Image.open(
+            io.BytesIO(image_data)
+        )
+
+        image = image.convert("RGB")
+
+        extracted_text = pytesseract.image_to_string(
+            image,
+            lang = "eng"
+        )
+
+        return extracted_text
+
+    except Exception as e:
+        print(f"OCR Error: {e}")
+        return ""    
+
+        
+# =========================================================
+# 7. WORD DOCUMENT EXTRACTION
 # =========================================================
 
 def extract_word(file_path):
@@ -211,7 +253,7 @@ def extract_word(file_path):
     return "\n".join(extracted_text)
 
 # =========================================================
-# 7. POWERPOINT DOCUMENT EXTRACTION
+# 8. POWERPOINT DOCUMENT EXTRACTION
 # =========================================================
 
 def extract_powerpoint(file_path):
@@ -248,7 +290,7 @@ def extract_powerpoint(file_path):
 
 
 # =========================================================
-# 8. EXCEL DOCUMENT EXTRACTION
+# 9. EXCEL DOCUMENT EXTRACTION
 # =========================================================
 
 def extract_excel(file_path):
@@ -293,7 +335,7 @@ def extract_excel(file_path):
     return "\n".join(extracted_text)
 
 # =========================================================
-# 9.PDF TEXT EXTRACTION
+# 10.PDF TEXT EXTRACTION
 # =========================================================
 
 def extract_text_from_pdf(file_path):
@@ -308,33 +350,166 @@ def extract_text_from_pdf(file_path):
             if page_text.strip():
                 extracted_text.append(page_text)
 
-    return "\n".join(extracted_text)             
+    return "\n".join(extracted_text)    
+
+#-------------------------------------------------------------
+# 11. Image text retrieval from DOCX, PPTX, EXCEL, PDF
+# ------------------------------------------------------------
+
+def extract_ocr_from_word(file_path):
+
+    extracted_text  = []
+
+    try:
+
+        with zipfile.ZipFile(file_path , "r") as docx_zip:
+
+            for file_name in docx_zip.namelist():
+
+                if file_name.startswith("word/media/"):
+                    image_data = docx_zip.read(file_name)
+
+                    text = extract_text_from_image(
+                        image_data
+                    )
+
+                    if text.strip():
+                        extracted_text.append(text)
+
+    except Exception as e:
+         print(f"Word OCR Error: {e}")
+
+    return "\n".join(extracted_text)        
+
+
+def extract_ocr_from_powerpoint(file_path):
+
+    extracted_text = []
+
+    try:
+        presentation = Presentation(file_path)
+
+        for slide in presentation.slides:
+            for shape in slide.shapes:
+                if shape.shape_type == 13:
+                
+                    image_data = shape.image.blob
+                    text = extract_text_from_image(
+                        image_data
+                    )
+
+                    if text.strip():
+                        extracted_text.append(text)
+
+    except Exception as e:
+        print(f"PowerPoint OCR Error: {e}")
+
+    return "\n".join(extracted_text)
+
+def extract_ocr_from_excel(file_path):
+
+    extracted_text = []
+
+    try:
+        workbook = load_workbook(
+            file_path,
+            data_only=True
+        )
+
+        for worksheet in workbook.worksheets:
+
+            for image in worksheet._images:
+
+                image_data = image._data()
+
+                text = extract_text_from_image(
+                    image_data
+                )
+
+                if text.strip():
+                    extracted_text.append(text)
+
+        workbook.close()
+
+    except Exception as e:
+        print(f"Excel OCR Error: {e}")
+
+    return "\n".join(extracted_text)
+
+def extract_ocr_from_pdf(file_path):
+
+    extracted_text = []
+
+    try:
+        with fitz.open(file_path) as pdf_document:
+
+            for page_number, page in enumerate(
+                pdf_document,
+                start=1
+            ):
+
+                # Convert PDF page into an image
+                pix = page.get_pixmap(
+                    matrix=fitz.Matrix(2, 2),
+                    alpha=False
+                )
+
+                # Convert image into PNG bytes
+                image_data = pix.tobytes("png")
+
+                # Perform OCR
+                ocr_text = extract_text_from_image(
+                    image_data
+                )
+
+                if ocr_text.strip():
+                    extracted_text.append(ocr_text)
+
+    except Exception as e:
+        print(f"PDF OCR Error: {e}")
+
+    return "\n".join(extracted_text)
 
 # =========================================================
-# 10. EXTRACT TEXT BASED ON FILE EXTENSION
+# 12. EXTRACT TEXT BASED ON FILE EXTENSION
 # =========================================================
 
 def extract_document_text(file_path):
 
     extension = file_path.suffix.lower()
-    
-    if extension == ".pptx":
-        return extract_powerpoint(file_path)
+
+    if extension == ".docx":
+
+        normal_text = extract_word(file_path)
+        ocr_text = extract_ocr_from_word(file_path)
+
+        return normal_text + "\n" + ocr_text
+
+    elif extension == ".pptx":
+
+        normal_text = extract_powerpoint(file_path)
+        ocr_text = extract_ocr_from_powerpoint(file_path)
+
+        return normal_text + "\n" + ocr_text
 
     elif extension == ".xlsx":
-        return extract_excel(file_path)
 
-    elif extension == ".docx":
-        return extract_word(file_path)
+        normal_text = extract_excel(file_path)
+        ocr_text = extract_ocr_from_excel(file_path)
+
+        return normal_text + "\n" + ocr_text
 
     elif extension == ".pdf":
-        return extract_text_from_pdf(file_path)
+
+        normal_text = extract_text_from_pdf(file_path)
+        ocr_text = extract_ocr_from_pdf(file_path)
+
+        return normal_text + "\n" + ocr_text
 
     return ""
 
-
 # =========================================================
-# 11. SEARCH ALL DOCUMENTS
+# 13. SEARCH ALL DOCUMENTS
 # =========================================================
 
 def search_documents(repository_path, search_keyword):
@@ -427,7 +602,7 @@ def search_documents(repository_path, search_keyword):
     )
 
 # =========================================================
-# 12. SIDEBAR SETTINGS
+# 14. SIDEBAR SETTINGS
 # =========================================================
 
 DEFAULT_REPOSITORY = (
@@ -492,7 +667,7 @@ with st.sidebar:
     )
 
 # =========================================================
-# 13. MAIN SEARCH INTERFACE
+# 15. MAIN SEARCH INTERFACE
 # =========================================================
 
 # Load header and hero section
@@ -528,7 +703,7 @@ search_button = st.button(
 )
 
 # =========================================================
-# 14. SEARCH EXECUTION AND RESULTS
+# 16. SEARCH EXECUTION AND RESULTS
 # =========================================================
 
 if search_button:
@@ -538,7 +713,6 @@ if search_button:
     # -----------------------------------------------------
 
     if not search_keyword.strip():
-
         st.warning(
             "Please enter a keyword or phrase."
         )
@@ -823,7 +997,7 @@ if search_button:
 
 
 # =========================================================
-# 15. FOOTER
+# 17. FOOTER
 # =========================================================
 
 st.html(

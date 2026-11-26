@@ -665,3 +665,10 @@ section.main .block-container {
         font-size: 13px;
     }
 }
+
+/* Precisely centre all header content vertically */
+
+.ic-brand-left,
+.ic-product-name {
+    transform: translateY(8px);
+}

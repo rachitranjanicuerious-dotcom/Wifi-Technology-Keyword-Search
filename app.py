@@ -8,9 +8,10 @@ import zipfile
 import io 
 import html
 import nltk
+import fitz
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
-import base64
+import base64 
 
 nltk.download("wordnet", quiet=True)
 nltk.download("averaged_perceptron_tagger_eng", quiet=True)
@@ -103,7 +104,8 @@ def create_zip_file(results):
 SUPPORTED_EXTENSIONS = {
     ".docx",
     ".pptx",
-    ".xlsx"
+    ".xlsx",
+    "pdf"
 }
 
 # =========================================================
@@ -159,8 +161,8 @@ def lemmatize_text(text):
         r"[A-Za-z0-9]+(?:[.+#][A-Za-z0-9+#]*)*",
         text
     )
-    tagged_words = nltk.pos_tag(tokens)
 
+    tagged_words = nltk.pos_tag(tokens)
     lemmatized_words = []
 
     for word, tag in tagged_words:
@@ -290,9 +292,26 @@ def extract_excel(file_path):
 
     return "\n".join(extracted_text)
 
+# =========================================================
+# 9.PDF TEXT EXTRACTION
+# =========================================================
+
+def extract_text_from_pdf(file_path):
+    
+    extracted_text = []
+
+    with fitz.open(file_path) as pdf_document:
+
+        for page_number, page in enumerate(pdf_document, start = 1):
+            page_text = page.get_text("text")
+
+            if page_text.strip():
+                extracted_text.append(page_text)
+
+    return "\n".join(extracted_text)             
 
 # =========================================================
-# 9. EXTRACT TEXT BASED ON FILE EXTENSION
+# 10. EXTRACT TEXT BASED ON FILE EXTENSION
 # =========================================================
 
 def extract_document_text(file_path):
@@ -308,15 +327,17 @@ def extract_document_text(file_path):
     elif extension == ".docx":
         return extract_word(file_path)
 
+    elif extension == ".pdf":
+        return extract_text_from_pdf(file_path)
+
     return ""
 
 
 # =========================================================
-# 10. SEARCH ALL DOCUMENTS
+# 11. SEARCH ALL DOCUMENTS
 # =========================================================
 
 def search_documents(repository_path, search_keyword):
-
     repository = Path(repository_path)
 
     results = []
@@ -406,7 +427,7 @@ def search_documents(repository_path, search_keyword):
     )
 
 # =========================================================
-# 11. SIDEBAR SETTINGS
+# 12. SIDEBAR SETTINGS
 # =========================================================
 
 DEFAULT_REPOSITORY = (
@@ -470,9 +491,8 @@ with st.sidebar:
         """
     )
 
-
 # =========================================================
-# 12. MAIN SEARCH INTERFACE
+# 13. MAIN SEARCH INTERFACE
 # =========================================================
 
 # Load header and hero section
@@ -493,7 +513,6 @@ st.caption(
     "to locate matching documents."
 )
 
-
 # Search input
 search_keyword = st.text_input(
     "Keyword or phrase",
@@ -509,7 +528,7 @@ search_button = st.button(
 )
 
 # =========================================================
-# 13. SEARCH EXECUTION AND RESULTS
+# 14. SEARCH EXECUTION AND RESULTS
 # =========================================================
 
 if search_button:
@@ -685,27 +704,9 @@ if search_button:
                 st.columns(2)
             )
 
-            # # -------------------------------------------------
-            # # 1. DOWNLOAD CSV
-            # # -------------------------------------------------
-
-            # with download_col1:
-
-            #     csv_data = display_results_df.to_csv(
-            #         index=False
-            #     )
-
-            #     st.download_button(
-            #         label="Download CSV",
-            #         data=csv_data,
-            #         file_name="matching_documents.csv",
-            #         mime="text/csv",
-            #         use_container_width=True,
-            #         on_click="ignore"
-            #     )
-
+           
             # -------------------------------------------------
-            # 2. DOWNLOAD EXCEL WITH CLICKABLE HYPERLINKS
+            # 1. DOWNLOAD EXCEL WITH CLICKABLE HYPERLINKS
             # -------------------------------------------------
 
             with download_col2:
@@ -777,7 +778,7 @@ if search_button:
                 )
 
             # -------------------------------------------------
-            # 3. DOWNLOAD RETRIEVED DOCUMENTS AS ZIP
+            # 2. DOWNLOAD RETRIEVED DOCUMENTS AS ZIP
             # -------------------------------------------------
 
             with download_col3:
@@ -822,7 +823,7 @@ if search_button:
 
 
 # =========================================================
-# 14. FOOTER
+# 15. FOOTER
 # =========================================================
 
 st.html(
